@@ -6,7 +6,9 @@
 
 ## 当前状态
 
-第一周：环境搭建与最小 Agent 实验。
+第一周完成：环境搭建、离线模拟实验、真实模型接入（硅基流动 DeepSeek-V4.1-Flash）。
+
+真实模型实验要点：硅基流动接口不支持 smolagents 默认的 `tool_choice="required"`，需在构造模型时传 `tool_choice="auto"`（详见 `experiments/02_real_model.py` 内注释）。
 
 ## 开发环境
 
