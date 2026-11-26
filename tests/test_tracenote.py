@@ -10,6 +10,7 @@ sys.path.insert(0, str(ROOT))
 
 from tracenote.loader import Chunk, chunk_markdown, load_notes, split_by_headings, split_long_text
 from tracenote.store import NotesStore
+from tracenote.agent import build_agent
 
 NOTES_DIR = ROOT / "data" / "notes"
 
@@ -102,3 +103,17 @@ class TestNotesStore:
         assert r.title == "FTS5 与 BM25"
         assert isinstance(r.start_line, int)
         assert "FTS5" in r.text or "BM25" in r.text
+
+
+class TestAgentInstructions:
+    """拒答规则测试：不调用模型，只验证 instructions 被正确设置。"""
+
+    def test_instructions_contains_refusal_rule(self):
+        # build_agent 会读 .env，但 instructions 是静态字符串，不依赖网络
+        try:
+            agent = build_agent()
+        except KeyError:
+            pytest.skip("SILICONFLOW_API_KEY 未配置，跳过 Agent 构建测试")
+        assert "无法回答" in agent.instructions
+        assert "search_notes" in agent.instructions
+        assert "来源" in agent.instructions

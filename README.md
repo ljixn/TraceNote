@@ -6,12 +6,13 @@
 
 ## 当前状态
 
-第二周完成：本地知识库（SQLite FTS5 全文检索）接入 Agent。
+第三周完成：网页界面（Gradio）+ 拒答规则（笔记查不到就说不知道）。
 
 - `tracenote/loader.py`：Markdown 导入与切块（按标题分节，单块 ≤600 字符）
 - `tracenote/store.py`：SQLite FTS5 存储 + BM25 检索（含中英混合/短查询的降级策略）
-- `tracenote/agent.py`：search_notes 工具 + Agent 构建
-- 17 个单元测试通过
+- `tracenote/agent.py`：search_notes 工具 + Agent 构建（含拒答规则 instructions）
+- `tracenote/ui.py`：Gradio 网页界面（聊天框 + 示例问题）
+- 18 个单元测试通过
 
 ## 架构
 
@@ -19,7 +20,10 @@
 data/notes/*.md ──loader 切块──▶ notes.db (FTS5 索引) ──store 检索──▶ search_notes 工具
                                                                         │
 用户提问 ────────────── ToolCallingAgent（smolagents）◀─────────────────┘
-              模型自主决定是否检索/用什么关键词，检索结果带来源引用
+              │  拒答规则：笔记查不到 → 说"不知道"，不瞎编
+              │  引用：回答标明来源文件+标题+行号
+              ▼
+         Gradio 网页界面（http://127.0.0.1:7860）
 ```
 
 ## 开发环境
@@ -38,8 +42,8 @@ data/notes/*.md ──loader 切块──▶ notes.db (FTS5 索引) ──store 
 # 重建知识库索引（data/notes/ 下放你的 .md 笔记）
 python -X utf8 -c "from tracenote.agent import rebuild_index; print(rebuild_index(), '块已入库')"
 
-# 运行本地知识库 Agent（需要 .env 里的模型密钥）
-python -X utf8 experiments\04_kb_agent.py
+# 启动网页界面（浏览器打开 http://127.0.0.1:7860）
+python -X utf8 -m tracenote.ui
 
 # 运行测试
 python -X utf8 -m pytest -q
