@@ -6,22 +6,26 @@
 
 ## 当前状态
 
-第三周完成：网页界面（Gradio）+ 拒答规则（笔记查不到就说不知道）。
+第四周完成：运行记录（黑匣子）+ 友好报错（安全带）。
 
 - `tracenote/loader.py`：Markdown 导入与切块（按标题分节，单块 ≤600 字符）
 - `tracenote/store.py`：SQLite FTS5 存储 + BM25 检索（含中英混合/短查询的降级策略）
-- `tracenote/agent.py`：search_notes 工具 + Agent 构建（含拒答规则 instructions）
-- `tracenote/ui.py`：Gradio 网页界面（聊天框 + 示例问题）
-- 18 个单元测试通过
+- `tracenote/agent.py`：search_notes 工具 + Agent 构建 + run_with_trace 统一入口
+- `tracenote/tracer.py`：运行记录（每次问答存 JSON 档案到 runs/）
+- `tracenote/errors.py`：友好报错（技术错误翻译成人话）
+- `tracenote/ui.py`：Gradio 网页界面（聊天框 + 本次运行详情）
+- 32 个单元测试通过
 
 ## 架构
 
 ```text
 data/notes/*.md ──loader 切块──▶ notes.db (FTS5 索引) ──store 检索──▶ search_notes 工具
-                                                                        │
-用户提问 ────────────── ToolCallingAgent（smolagents）◀─────────────────┘
+                                                                         │
+用户提问 ────────────── ToolCallingAgent（smolagents）◀──────────────────┘
               │  拒答规则：笔记查不到 → 说"不知道"，不瞎编
               │  引用：回答标明来源文件+标题+行号
+              │  运行记录：每次问答存 JSON 档案（runs/，不进 Git）
+              │  友好报错：出错显示人话，不甩报错堆栈
               ▼
          Gradio 网页界面（http://127.0.0.1:7860）
 ```
@@ -44,6 +48,9 @@ python -X utf8 -c "from tracenote.agent import rebuild_index; print(rebuild_inde
 
 # 启动网页界面（浏览器打开 http://127.0.0.1:7860）
 python -X utf8 -m tracenote.ui
+
+# 命令行跑一次带运行记录的问答（会生成 runs/*.json）
+python -X utf8 -c "from tracenote.agent import run_with_trace; a, t = run_with_trace('什么是 Agent？'); print(a); print(t.summary_text())"
 
 # 运行测试
 python -X utf8 -m pytest -q

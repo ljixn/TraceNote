@@ -14,7 +14,7 @@ import gradio as gr
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from tracenote.agent import build_agent, rebuild_index
+from tracenote.agent import rebuild_index, run_with_trace
 from tracenote.store import NotesStore
 
 DB_PATH = ROOT / "data" / "notes.db"
@@ -30,15 +30,12 @@ def ensure_index() -> int:
 
 
 def chat(question: str, history: list) -> str:
-    """处理用户提问：调用 Agent，返回回答。
+    """处理用户提问：调用 Agent，回答 + 本次运行详情。
 
-    history 是 Gradio 传入的对话历史，这里用 reset=False 让 Agent 记住上下文。
+    run_with_trace 会自动保存运行档案到 runs/，出错时给出友好提示。
     """
-    agent = build_agent()
-    # 第二次提问起，保留之前的对话记忆
-    reset = len(history) == 0
-    answer = agent.run(question, reset=reset)
-    return answer
+    answer, trace = run_with_trace(question, reset=True)
+    return f"{answer}\n\n---\n\n{trace.summary_text()}"
 
 
 def build_ui() -> gr.Blocks:
@@ -50,10 +47,11 @@ def build_ui() -> gr.Blocks:
             f"# TraceNote · 个人知识库问答\n\n"
             f"当前知识库已加载 **{chunk_count} 个笔记片段**。\n\n"
             f"提问后，AI 会自动检索你的笔记，给出**带来源引用**的回答。\n"
-            f"如果笔记里没有相关内容，会如实告诉你『不知道』。"
+            f"如果笔记里没有相关内容，会如实告诉你『不知道』。\n"
+            f"每次问答都会保存运行档案到 `runs/` 目录，可回看工具调用过程。"
         )
 
-        chatbot = gr.ChatInterface(
+        gr.ChatInterface(
             fn=chat,
             title="TraceNote",
             description="基于本地 Markdown 笔记的智能问答 Agent",

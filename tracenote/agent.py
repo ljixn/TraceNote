@@ -1,20 +1,22 @@
 """TraceNote Agent 工具与构建逻辑。
 
-第二周核心变化：search_notes 从"硬编码 3 条笔记"升级为
-"SQLite FTS5 检索本地知识库"。Agent 其余部分不动——这就是
-工具与编排解耦的价值。
+- 工具层：search_notes 查 SQLite FTS5 本地知识库；
+- 运行层：run_with_trace() 包装 Agent，存运行档案 + 友好报错。
 """
 
 from __future__ import annotations
 
 import os
+import time
 from pathlib import Path
 
 from dotenv import load_dotenv
 from smolagents import OpenAIServerModel, ToolCallingAgent, tool
 
+from .errors import to_friendly_message
 from .loader import load_notes
 from .store import NotesStore
+from .tracer import RunTrace, extract_token_usage, extract_tool_calls, new_trace, save_trace
 
 load_dotenv()
 
@@ -78,3 +80,33 @@ def build_agent(model_id: str | None = None) -> ToolCallingAgent:
             "4. 回答用中文，结构清晰，可以用分点和加粗。"
         ),
     )
+
+
+def run_with_trace(question: str, agent: ToolCallingAgent | None = None, reset: bool = True) -> tuple[str, RunTrace]:
+    """运行一次问答：返回答案 + 运行档案，出错时给出友好提示而不是报错堆栈。
+
+    这是网页界面和实验脚本统一使用的入口。
+    档案自动保存到 runs/ 目录（该目录不进 Git）。
+
+    Args:
+        question: 用户问题。
+        agent: 复用的 Agent 实例；不传则新建一个。
+        reset: True 清空 Agent 记忆开始新对话；False 接着上轮对话。
+    """
+    trace = new_trace(question)
+    agent = agent or build_agent()
+    start = time.monotonic()
+
+    try:
+        trace.answer = agent.run(question, reset=reset)
+    except Exception as e:
+        trace.error = to_friendly_message(e)
+        trace.answer = trace.error
+    finally:
+        trace.duration_seconds = time.monotonic() - start
+        trace.steps = len(getattr(agent.memory, "steps", []))
+        trace.tool_calls = extract_tool_calls(agent)
+        trace.input_tokens, trace.output_tokens = extract_token_usage(agent)
+        save_trace(trace)
+
+    return trace.answer, trace
