@@ -1,0 +1,12 @@
+{
+  "config": "top_k=1",
+  "top_k": 1,
+  "total_cases": 12,
+  "accuracy": 0.833,
+  "refusal_accuracy": 1.0,
+  "hallucination_rate": 0.0,
+  "citation_rate": 0.833,
+  "avg_tokens": 7853.4,
+  "avg_duration_seconds": 8.2,
+  "avg_steps": 5.17
+}

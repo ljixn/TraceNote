@@ -6,15 +6,30 @@
 
 ## 当前状态
 
-第四周完成：运行记录（黑匣子）+ 友好报错（安全带）。
+第五周完成：评测体系（12 道固定题库 + A/B 对比 + 真实数据报告）。
 
 - `tracenote/loader.py`：Markdown 导入与切块（按标题分节，单块 ≤600 字符）
 - `tracenote/store.py`：SQLite FTS5 存储 + BM25 检索（含中英混合/短查询的降级策略）
-- `tracenote/agent.py`：search_notes 工具 + Agent 构建 + run_with_trace 统一入口
+- `tracenote/agent.py`：NotesSearchTool（top_k 可配置）+ Agent 构建 + run_with_trace
 - `tracenote/tracer.py`：运行记录（每次问答存 JSON 档案到 runs/）
 - `tracenote/errors.py`：友好报错（技术错误翻译成人话）
-- `tracenote/ui.py`：Gradio 网页界面（聊天框 + 本次运行详情）
-- 32 个单元测试通过
+- `tracenote/evaluation.py`：评测框架（题库、规则打分、指标汇总）
+- `evaluation/cases.py`：12 道固定题库
+- `evaluation/REPORT.md`：评测报告（含真实数据）
+- `tracenote/ui.py`：Gradio 网页界面
+- 46 个单元测试通过
+
+## 评测结果（真实数据）
+
+| 配置 | 通过率 | 拒答准确率 | 幻觉率 | 引用率 | 平均 token | 平均耗时 |
+|---|---|---|---|---|---|---|
+| top_k=1 | 83.3% | 100% | 0% | 83.3% | 7853 | 8.2 秒 |
+| **top_k=3** | **91.7%** | 100% | 0% | **100%** | **6636** | **6.7 秒** |
+
+详见 [evaluation/REPORT.md](evaluation/REPORT.md)。核心结论：
+- 幻觉率 0%——笔记里没有的内容，模型会明确拒答而不是瞎编；
+- 查 3 条反而比查 1 条省 16% token——信息不足会导致模型反复重试；
+- 瓶颈在检索层而非模型层——长查询在 trigram 分词下容易失配。
 
 ## 架构
 
@@ -54,6 +69,9 @@ python -X utf8 -c "from tracenote.agent import run_with_trace; a, t = run_with_t
 
 # 运行测试
 python -X utf8 -m pytest -q
+
+# 跑评测（两轮 A/B 对比，会真实调用模型）
+python -X utf8 -m evaluation.run_eval
 ```
 
 ## 真实模型接入要点

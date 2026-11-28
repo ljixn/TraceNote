@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from smolagents import OpenAIServerModel, ToolCallingAgent, tool
+from smolagents import OpenAIServerModel, Tool, ToolCallingAgent
 
 from .errors import to_friendly_message
 from .loader import load_notes
@@ -25,27 +25,48 @@ DEFAULT_NOTES_DIR = ROOT / "data" / "notes"
 DEFAULT_DB_PATH = ROOT / "data" / "notes.db"
 
 
-@tool
-def search_notes(query: str) -> str:
-    """Search the personal knowledge base of Markdown notes and return matching passages with their sources.
+class NotesSearchTool(Tool):
+    """搜索本地笔记知识库的工具。
 
-    Use this tool for any question about Agent concepts, RAG, retrieval, study methods,
-    or any knowledge that might exist in the notes. Always search before answering.
-    If the tool returns no results, say you don't know instead of guessing.
-
-    Args:
-        query: A search query in Chinese or English, e.g. 'Agent 是什么', '为什么需要切块', 'BM25'.
+    为什么写成类而不是 @tool 函数：检索条数 top_k 需要在构造时配置，
+    这样才能做 A/B 对比（同一批题，查 1 条 vs 查 3 条）。
     """
-    with NotesStore(DEFAULT_DB_PATH) as store:
-        results = store.search(query, limit=3)
 
-    if not results:
-        return "知识库中没有找到相关内容。请如实告知用户：根据现有笔记无法回答。"
+    name = "search_notes"
+    description = (
+        "Search the personal knowledge base of Markdown notes and return matching passages with their sources. "
+        "Use this tool for any question about Agent concepts, RAG, retrieval, study methods, "
+        "or any knowledge that might exist in the notes. Always search before answering. "
+        "If the tool returns no results, say you don't know instead of guessing."
+    )
+    inputs = {
+        "query": {
+            "type": "string",
+            "description": "A search query in Chinese or English, e.g. 'Agent 是什么', '为什么需要切块', 'BM25'.",
+        }
+    }
+    output_type = "string"
 
-    parts = []
-    for r in results:
-        parts.append(f"来源：{r.source}（第 {r.start_line} 行起，标题：{r.title}）\n{r.text}")
-    return "\n\n---\n\n".join(parts)
+    def __init__(self, db_path: Path = DEFAULT_DB_PATH, top_k: int = 3):
+        super().__init__()
+        self.db_path = db_path
+        self.top_k = top_k
+
+    def forward(self, query: str) -> str:
+        with NotesStore(self.db_path) as store:
+            results = store.search(query, limit=self.top_k)
+
+        if not results:
+            return "知识库中没有找到相关内容。请如实告知用户：根据现有笔记无法回答。"
+
+        parts = []
+        for r in results:
+            parts.append(f"来源：{r.source}（第 {r.start_line} 行起，标题：{r.title}）\n{r.text}")
+        return "\n\n---\n\n".join(parts)
+
+
+# 默认工具实例：网页界面和其他调用方使用 top_k=3
+search_notes = NotesSearchTool()
 
 
 def rebuild_index(notes_dir: Path = DEFAULT_NOTES_DIR, db_path: Path = DEFAULT_DB_PATH) -> int:
@@ -55,7 +76,13 @@ def rebuild_index(notes_dir: Path = DEFAULT_NOTES_DIR, db_path: Path = DEFAULT_D
         return store.rebuild(chunks)
 
 
-def build_agent(model_id: str | None = None) -> ToolCallingAgent:
+def build_agent(model_id: str | None = None, top_k: int = 3) -> ToolCallingAgent:
+    """构建 Agent。
+
+    Args:
+        model_id: 覆盖 .env 里的模型名。
+        top_k: 每次检索返回几条笔记。评测时用来做 A/B 对比。
+    """
     model = OpenAIServerModel(
         model_id=model_id or os.environ.get("SILICONFLOW_MODEL", "deepseek-ai/DeepSeek-V4.1-Flash"),
         api_base=os.environ.get("SILICONFLOW_BASE_URL", "https://api.siliconflow.cn/v1"),
@@ -64,8 +91,9 @@ def build_agent(model_id: str | None = None) -> ToolCallingAgent:
         # 硅基流动不支持 tool_choice="required"（smolagents 默认），返回空 choices。
         tool_choice="auto",
     )
+    tool_instance = search_notes if top_k == 3 else NotesSearchTool(top_k=top_k)
     return ToolCallingAgent(
-        tools=[search_notes],
+        tools=[tool_instance],
         model=model,
         max_steps=5,
         verbosity_level=2,
